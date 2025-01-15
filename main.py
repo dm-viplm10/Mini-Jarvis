@@ -6,7 +6,7 @@ from supabase import create_client, Client
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from pathlib import Path
-import sys
+from utils.supabase_client import SupabaseMemory
 import os
 
 # Load environment variables
@@ -16,11 +16,6 @@ load_dotenv()
 app = FastAPI()
 security = HTTPBearer()
 
-# Supabase setup
-supabase: Client = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_KEY")
-)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+supabase_memory = SupabaseMemory()
 
 # Request/Response Models
 class AgentRequest(BaseModel):
@@ -55,38 +52,6 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
         )
     return True
 
-async def fetch_conversation_history(session_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """Fetch the most recent conversation history for a session."""
-    try:
-        response = supabase.table("messages") \
-            .select("*") \
-            .eq("session_id", session_id) \
-            .order("created_at", desc=True) \
-            .limit(limit) \
-            .execute()
-        
-        # Convert to list and reverse to get chronological order
-        messages = response.data[::-1]
-        return messages
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch conversation history: {str(e)}")
-
-async def store_message(session_id: str, message_type: str, content: str, data: Optional[Dict] = None):
-    """Store a message in the Supabase messages table."""
-    message_obj = {
-        "type": message_type,
-        "content": content
-    }
-    if data:
-        message_obj["data"] = data
-
-    try:
-        supabase.table("messages").insert({
-            "session_id": session_id,
-            "message": message_obj
-        }).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to store message: {str(e)}")
 
 @app.post("/api/sample-supabase-agent", response_model=AgentResponse)
 async def sample_supabase_agent(
@@ -94,8 +59,12 @@ async def sample_supabase_agent(
     authenticated: bool = Depends(verify_token)
 ):
     try:
+        is_new_session = await supabase_memory.start_session(request.session_id)
         # Fetch conversation history from the DB
-        conversation_history = await fetch_conversation_history(request.session_id)
+        if not is_new_session:
+            conversation_history = await supabase_memory.fetch_conversation_history(request.session_id)
+        else:
+            conversation_history = []
         
         # Convert conversation history to format expected by agent
         # This will be different depending on your framework (Pydantic AI, LangChain, etc.)
@@ -108,7 +77,7 @@ async def sample_supabase_agent(
             messages.append(msg)
 
         # Store user's query
-        await store_message(
+        await supabase_memory.store_message(
             session_id=request.session_id,
             message_type="human",
             content=request.query
@@ -127,7 +96,7 @@ async def sample_supabase_agent(
         agent_response = "This is a sample agent response..."
 
         # Store agent's response
-        await store_message(
+        await supabase_memory.store_message(
             session_id=request.session_id,
             message_type="ai",
             content=agent_response,
@@ -139,7 +108,7 @@ async def sample_supabase_agent(
     except Exception as e:
         print(f"Error processing request: {str(e)}")
         # Store error message in conversation
-        await store_message(
+        await supabase_memory.store_message(
             session_id=request.session_id,
             message_type="ai",
             content="I apologize, but I encountered an error processing your request.",

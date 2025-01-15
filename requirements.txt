@@ -4,3 +4,9 @@ pydantic
 supabase
 python-dotenv
 asyncpg
+torch
+torchvision
+torchaudio
+llama-index
+llama-index-embeddings-nomic
+llama-index-vector-stores-postgres
