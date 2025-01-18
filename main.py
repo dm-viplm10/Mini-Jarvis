@@ -1,12 +1,9 @@
-from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
-from supabase import create_client, Client
-from pydantic import BaseModel
 from dotenv import load_dotenv
-from pathlib import Path
-from utils.supabase_client import SupabaseMemory
+from db.supabase_client import SupabaseMemory
+from agents.models import AgentRequest, AgentResponse
 import os
 
 # Load environment variables
@@ -27,16 +24,6 @@ app.add_middleware(
 
 supabase_memory = SupabaseMemory()
 
-# Request/Response Models
-class AgentRequest(BaseModel):
-    query: str
-    user_id: str
-    request_id: str
-    session_id: str
-
-class AgentResponse(BaseModel):
-    success: bool
-
 def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)) -> bool:
     """Verify the bearer token against environment variable."""
     expected_token = os.getenv("API_BEARER_TOKEN")
@@ -53,8 +40,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
     return True
 
 
-@app.post("/api/sample-supabase-agent", response_model=AgentResponse)
-async def sample_supabase_agent(
+@app.post("/api/mini-jarvis", response_model=AgentResponse)
+async def mini_jarvis(
     request: AgentRequest,
     authenticated: bool = Depends(verify_token)
 ):

@@ -3,7 +3,7 @@ from supabase import create_client, Client
 import os
 from typing import Dict, Any, List, Optional
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Initialize Supabase client
 supabase: Client = create_client(
@@ -88,7 +88,7 @@ class SupabaseMemory:
                 "query_embedding": query_embedding,
                 "workflow": json.dumps(workflow),
                 "results": json.dumps(results),
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }).execute()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error storing plan: {str(e)}")

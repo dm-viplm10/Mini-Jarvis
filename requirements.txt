@@ -10,3 +10,4 @@ torchaudio
 llama-index
 llama-index-embeddings-nomic
 llama-index-vector-stores-postgres
+git+https://github.com/pydantic/pydantic-ai.git
