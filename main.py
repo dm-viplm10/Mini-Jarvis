@@ -13,6 +13,8 @@ load_dotenv()
 app = FastAPI()
 security = HTTPBearer()
 
+openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+openrouter_base_url = "https://openrouter.ai/api/v1"
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,7 +56,6 @@ async def mini_jarvis(
             conversation_history = []
         
         # Convert conversation history to format expected by agent
-        # This will be different depending on your framework (Pydantic AI, LangChain, etc.)
         messages = []
         for msg in conversation_history:
             msg_data = msg["message"]
@@ -70,16 +71,7 @@ async def mini_jarvis(
             content=request.query
         )            
 
-        """
-        TODO:
-        This is where you insert the custom logic to get the response from your agent.
-        Your agent can also insert more records into the database to communicate
-        actions/status as it is handling the user's question/request.
-        Additionally:
-            - Use the 'messages' array defined about for the chat history. This won't include the latest message from the user.
-            - Use request.query for the user's prompt.
-            - Use request.session_id if you need to insert more messages into the DB in the agent logic.
-        """
+        
         agent_response = "This is a sample agent response..."
 
         # Store agent's response

@@ -1,4 +1,4 @@
-from agents.agents import DirectorAgent, GithubAgent, CommunicationAgent
+from agents import github_agent, director_agent
 from agents.models import AgentType, WorkflowStep
 from db.supabase_client import SupabaseMemory
 from datetime import datetime
@@ -6,9 +6,9 @@ from typing import List, Dict, Any
 
 class Orchestrator:
     def __init__(self):
-        self.director = DirectorAgent()
-        self.github_agent = GithubAgent()
-        self.communication_agent = CommunicationAgent()
+        self.director = director_agent
+        self.github_agent = github_agent
+        # self.communication_agent = CommunicationAgent()
         self.memory = SupabaseMemory()
         
     async def process_query(self, query: str) -> Dict[str, Any]:
