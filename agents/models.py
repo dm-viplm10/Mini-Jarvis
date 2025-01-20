@@ -14,9 +14,9 @@ class AgentRequest(BaseModel):
     request_id: str
     session_id: str
 
-class AgentAction(BaseModel):
+class AgentActions(BaseModel):
     agent_type: AgentType
-    action: str
+    actions: List[str]
     parameters: Dict[str, Any] = Field(default_factory=dict)
     
 class AgentResponse(BaseModel):
@@ -24,6 +24,6 @@ class AgentResponse(BaseModel):
     
 class WorkflowStep(BaseModel):
     agent: AgentType
-    action: str
+    actions: List[str]
     result: Dict[str, Any]
     timestamp: datetime
