@@ -11,3 +11,14 @@ llama-index
 llama-index-embeddings-nomic
 llama-index-vector-stores-postgres
 git+https://github.com/pydantic/pydantic-ai.git
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+openai
+python-jose
+python-multipart
+logfire
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
