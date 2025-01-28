@@ -24,20 +24,22 @@ github_agent = Agent(
 
 
 @github_agent.tool
-async def tool_1(ctx: RunContext[GithubDeps], github_url: str) -> List[str]:
+async def get_active_prs(ctx: RunContext[GithubDeps], github_url: str) -> List[str]:
     return await github_tools.get_active_pull_requests(ctx, github_url)
 
 
 @github_agent.tool
-async def tool_2(ctx: RunContext[GithubDeps], github_url: str) -> str:
+async def get_repo_info(ctx: RunContext[GithubDeps], github_url: str) -> str:
     return await github_tools.get_repo_information(ctx, github_url)
 
 
 @github_agent.tool
-async def tool_3(ctx: RunContext[GithubDeps], github_url: str) -> str:
+async def get_repo_structure(ctx: RunContext[GithubDeps], github_url: str) -> str:
     return await github_tools.get_repo_file_structure(ctx, github_url)
 
 
 @github_agent.tool
-async def tool_4(ctx: RunContext[GithubDeps], github_url: str, file_path: str) -> str:
+async def get_file_content(
+    ctx: RunContext[GithubDeps], github_url: str, file_path: str
+) -> str:
     return await github_tools.get_repo_file_content(ctx, github_url, file_path)

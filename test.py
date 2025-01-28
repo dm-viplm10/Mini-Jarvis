@@ -1,12 +1,12 @@
 import re
 from typing import Dict, Any, List, Tuple
-import aiohttp
-import os
-from datetime import datetime
+from config import github_token
+import httpx
 
 
 class GithubTool:
     def __init__(self):
+        self.client = httpx.Client()
         self.base_url = "https://api.github.com"
 
     def _parse_repo_url(self, github_url: str) -> Tuple[str, str]:
@@ -16,17 +16,15 @@ class GithubTool:
         owner, repo = match.groups()
         return (owner, repo)
 
-    def _get_headers(self, github_token: str) -> Dict[str, str]:
+    def _get_headers(self, github_token: str | None) -> Dict[str, str]:
         return {"Authorization": f"token {github_token}"} if github_token else {}
 
-    async def get_active_pull_requests(self, ctx, github_url: str) -> List[str]:
+    def get_active_pull_requests(self, github_url: str) -> List[str]:
         owner, repo = self._parse_repo_url(github_url)
 
         # Make request to GitHub API
         api_url = f"{self.base_url}/repos/{owner}/{repo}/pulls?state=open"
-        response = await ctx.deps.client.get(
-            api_url, headers=self._get_headers(ctx.deps.github_token)
-        )
+        response = self.client.get(api_url, headers=self._get_headers(github_token))
         if response.status_code != 200:
             raise Exception(
                 f"GitHub API request failed with status {response.status_code}"
@@ -42,7 +40,7 @@ class GithubTool:
 
         return pull_requests
 
-    async def get_repo_information(self, ctx, github_url: str) -> str:
+    def get_repo_information(self, github_url: str) -> str:
         """Get repository information including size and description using GitHub API.
 
         Args:
@@ -53,9 +51,9 @@ class GithubTool:
             str: Repository information as a formatted string.
         """
         owner, repo = self._parse_repo_url(github_url)
-        response = await ctx.deps.client.get(
+        response = self.client.get(
             f"https://api.github.com/repos/{owner}/{repo}",
-            headers=self._get_headers(ctx.deps.github_token),
+            headers=self._get_headers(github_token),
         )
 
         if response.status_code != 200:
@@ -74,7 +72,7 @@ class GithubTool:
             f"Last Updated: {data['updated_at']}"
         )
 
-    async def get_repo_file_structure(self, ctx, github_url: str) -> str:
+    def get_repo_file_structure(self, github_url: str) -> str:
         """Get the directory structure of a GitHub repository.
 
         Args:
@@ -85,16 +83,16 @@ class GithubTool:
             str: Directory structure as a formatted string.
         """
         owner, repo = self._parse_repo_url(github_url)
-        response = await ctx.deps.client.get(
+        response = self.client.get(
             f"https://api.github.com/repos/{owner}/{repo}/git/trees/main?recursive=1",
-            headers=self._get_headers(ctx.deps.github_token),
+            headers=self._get_headers(github_token),
         )
 
         if response.status_code != 200:
             # Try with master branch if main fails
-            response = await ctx.deps.client.get(
+            response = self.client.get(
                 f"https://api.github.com/repos/{owner}/{repo}/git/trees/master?recursive=1",
-                headers=self._get_headers(ctx.deps.github_token),
+                headers=self._get_headers(github_token),
             )
             if response.status_code != 200:
                 return f"Failed to get repository structure: {response.text}"
@@ -115,7 +113,7 @@ class GithubTool:
 
         return "\n".join(structure)
 
-    async def get_repo_file_content(self, ctx, github_url: str, file_path: str) -> str:
+    def get_repo_file_content(self, ctx, github_url: str, file_path: str) -> str:
         """Get the content of a specific file from the GitHub repository.
 
         Args:
@@ -127,14 +125,14 @@ class GithubTool:
             str: File content as a string.
         """
         owner, repo = self._parse_repo_url(github_url)
-        response = await ctx.deps.client.get(
+        response = self.client.get(
             f"https://raw.githubusercontent.com/{owner}/{repo}/main/{file_path}",
             headers=self._get_headers(ctx.deps.github_token),
         )
 
         if response.status_code != 200:
             # Try with master branch if main fails
-            response = await ctx.deps.client.get(
+            response = self.client.get(
                 f"https://raw.githubusercontent.com/{owner}/{repo}/master/{file_path}",
                 headers=self._get_headers(ctx.deps.github_token),
             )
@@ -142,3 +140,10 @@ class GithubTool:
                 return f"Failed to get file content: {response.text}"
 
         return response.text
+
+
+github_tools = GithubTool()
+
+print(
+    github_tools.get_active_pull_requests("https://github.com/dm-viplm10/Mini-Jarvis")
+)

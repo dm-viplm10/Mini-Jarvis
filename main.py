@@ -13,11 +13,12 @@ from models.agent_workflows import (
     WorkflowPlan,
     WorkflowStep,
 )
+from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
 from models.agent_dependencies import Deps
 from agents.orchestrator_agent import orchestrator_agent
 from agents.director_agent import director_agent
 from agents.github_agent import github_agent
-from agents.communication_agent import communication_agent
+from agents.web_search_agent import web_search_agent
 import os
 import uuid
 import httpx
@@ -59,15 +60,15 @@ def verify_token(
 
 
 async def execute_workflow_step(
-    client: httpx.AsyncClient, step: WorkflowStep, agents: dict
+    client: httpx.AsyncClient, step: WorkflowStep, agents: dict, session_id: str
 ) -> AgentResponse:
     """Execute a single workflow step using the appropriate agent."""
     agent = agents[step.agent_type]
 
     try:
         result = await agent.run(
-            user_prompt=step.step_description,
-            deps=getattr(Deps, step.agent_type.upper(), None),
+            user_prompt=f"{step.step_description}\n\nThe provided inputs to run the agent and corresponding tools are: {step.inputs}",
+            deps=getattr(Deps(session_id), step.agent_type.upper(), None),
         )
 
         return AgentResponse(
@@ -91,26 +92,31 @@ async def create_steps_from_plan(
     steps = []
     current_agent = None
     current_descriptions = []
+    current_inputs = {}
 
     for step in plan_result:
         agent_type = AgentType[step["agent_type"].upper()]
 
         if current_agent == agent_type:
-            current_descriptions.append(step["step_description"])
+            current_descriptions.append(step.get("step_description", ""))
+            current_inputs.update(step.get("inputs", {}))
         else:
             if current_descriptions:
                 workflow_step = WorkflowStep(
                     step_description=" AND ".join(current_descriptions),
                     agent_type=current_agent,  # type: ignore
+                    inputs=current_inputs,
                 )
                 steps.append(workflow_step)
             current_agent = agent_type
-            current_descriptions = [step["step_description"]]
+            current_descriptions = [step.get("step_description")]
+            current_inputs = step.get("inputs", {})
 
     if current_descriptions:
         workflow_step = WorkflowStep(
             step_description=" AND ".join(current_descriptions),
             agent_type=current_agent,  # type: ignore
+            inputs=current_inputs,
         )
         steps.append(workflow_step)
 
@@ -130,6 +136,18 @@ async def mini_jarvis(
             if is_new_session
             else await supabase_memory.fetch_conversation_history(request.session_id)
         )
+        # Convert conversation history to format expected by agent
+        messages = []
+        for msg in conversation_history:
+            msg_data = msg["message"]
+            msg_type = msg_data["type"]
+            msg_content = msg_data["content"]
+            msg = (
+                ModelRequest(parts=[UserPromptPart(content=msg_content)])
+                if msg_type == "human"
+                else ModelResponse(parts=[TextPart(content=msg_content)])  # type: ignore
+            )
+            messages.append(msg)
 
         # Store user's query
         await supabase_memory.store_message(
@@ -143,18 +161,25 @@ async def mini_jarvis(
                 "orchestrator": orchestrator_agent,
                 "director": director_agent,
                 "github": github_agent,
-                "communication": communication_agent,
+                "web_research": web_search_agent,
             }
 
             # Get initial workflow plan from director
             plan_result = await director_agent.run(
-                user_prompt=request.query,
+                user_prompt=request.query, message_history=messages  # type: ignore
             )
+            if plan_result.data.get("type") == "direct_response":  # type: ignore
+                results: dict[Any, Any] = plan_result.data  # type: ignore
+                steps = []
+            else:
+                steps = await create_steps_from_plan(plan_result.data.get("steps", []))  # type: ignore
+                results = {}
+
             # Initialize workflow plan
             current_plan = WorkflowPlan(
                 plan_id=str(uuid.uuid4()),
                 user_query=request.query,
-                steps=await create_steps_from_plan(plan_result.data),  # type: ignore
+                steps=steps,  # type: ignore
             )
 
             # Store initial plan
@@ -162,24 +187,37 @@ async def mini_jarvis(
                 session_id=request.session_id,
                 query=request.query,
                 workflow=current_plan.model_dump(),
-                results={},
+                results=results,
             )
 
             # Execute workflow steps
-            final_result = None
-            while current_plan.current_step_index < len(current_plan.steps):
+            final_result = results
+            while (
+                current_plan.current_step_index < len(current_plan.steps)
+                and not results
+            ):
                 current_step = current_plan.steps[current_plan.current_step_index]
 
                 # Execute step
-                step_result = await execute_workflow_step(client, current_step, agents)
+                step_result = await execute_workflow_step(
+                    client, current_step, agents, request.session_id
+                )
                 current_plan.current_step_index += 1
 
                 # Store step result
-                # await supabase_memory.store_step_result(
-                #     session_id=request.session_id,
-                #     step_id=current_step.step_id,
-                #     result=step_result,
-                # )
+                if step_result.result:
+                    current_result = {
+                        "step_id": current_step.step_id,
+                        "step_description": current_step.step_description,
+                        "result": step_result.result.data,
+                    }
+                    await supabase_memory.store_plan(
+                        session_id=request.session_id,
+                        query=request.query,
+                        workflow=current_step.model_dump(),
+                        results=current_result,
+                    )
+                    final_result = current_result
 
             #     # Evaluate result
             #     should_continue = await execute_workflow_step(
@@ -220,19 +258,19 @@ async def mini_jarvis(
             #     current_plan.current_step_index += 1
             #     final_result = step_result
 
-            # # Store final response
-            # await supabase_memory.store_message(
-            #     session_id=request.session_id,
-            #     message_type="ai",
-            #     content=(
-            #         str(final_result.result) if final_result else "Workflow completed"
-            #     ),
-            #     data={"request_id": request.request_id},
-            # )
+            # Store final response
+            await supabase_memory.store_message(
+                session_id=request.session_id,
+                message_type="ai",
+                content=(
+                    final_result.get("result", "") or final_result.get("response", "")
+                ),
+                data={"request_id": request.request_id},
+            )
 
             return AgentResponse(
                 success=True,
-                result=None,
+                result=final_result,
                 agent_type=AgentType.DIRECTOR,
             )
 

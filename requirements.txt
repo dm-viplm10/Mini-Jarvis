@@ -22,3 +22,11 @@ logfire
 opentelemetry-api
 opentelemetry-sdk
 opentelemetry-instrumentation-fastapi
+beautifulsoup4
+types-beautifulsoup4
+langchain
+tiktoken
+pandas
+lxml
+langchain-community
+vecs

@@ -10,6 +10,7 @@ from config import embed_model
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL") or "", os.getenv("SUPABASE_SERVICE_KEY") or ""
 )
+connection_string = os.getenv("SUPABASE_CONNECTION_STRING")
 
 
 class SupabaseMemory:
