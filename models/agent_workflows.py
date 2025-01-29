@@ -8,7 +8,7 @@ class AgentType(str, Enum):
     ORCHESTRATOR = "orchestrator"
     DIRECTOR = "director"
     GITHUB = "github"
-    COMMUNICATION = "communication"
+    WEB_RESEARCH = "web_research"
 
 
 class AgentRequest(BaseModel):
@@ -35,6 +35,7 @@ class WorkflowStep(BaseModel):
     step_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     step_description: str
     agent_type: AgentType
+    inputs: Dict[str, Any] = Field(default_factory=dict)
     status: WorkflowStepStatus = WorkflowStepStatus.PENDING
     parent_step_id: Optional[str] = None
     next_step_ids: List[str] = []
