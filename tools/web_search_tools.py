@@ -86,7 +86,7 @@ async def fetch_and_split_url_content(
 ) -> list:
     """Fetch the content of a URL and extract the main text."""
     docs: list = []
-    for item in web_results:
+    for item in web_results[:3]:
         title = item.get("title", "")
         url = item.get("url", "")
         if title and url:

@@ -14,7 +14,7 @@ from models.agent_workflows import (
     WorkflowStep,
 )
 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
-from models.agent_dependencies import Deps
+from models.agent_dependencies import DirectorDeps, Deps
 from agents.orchestrator_agent import orchestrator_agent
 from agents.director_agent import director_agent
 from agents.github_agent import github_agent
@@ -68,7 +68,9 @@ async def execute_workflow_step(
     try:
         result = await agent.run(
             user_prompt=f"{step.step_description}\n\nThe provided inputs to run the agent and corresponding tools are: {step.inputs}",
-            deps=getattr(Deps(session_id), step.agent_type.upper(), None),
+            deps=getattr(
+                Deps(session_id), step.agent_type.upper(), None
+            ),  # type: ignore
         )
 
         return AgentResponse(
@@ -166,7 +168,12 @@ async def mini_jarvis(
 
             # Get initial workflow plan from director
             plan_result = await director_agent.run(
-                user_prompt=request.query, message_history=messages  # type: ignore
+                user_prompt=request.query,
+                message_history=messages,  # type: ignore
+                deps=DirectorDeps(
+                    session_id=request.session_id,
+                    global_deps=Deps(session_id=request.session_id),
+                ),
             )
             if plan_result.data.get("type") == "direct_response":  # type: ignore
                 results: dict[Any, Any] = plan_result.data  # type: ignore
