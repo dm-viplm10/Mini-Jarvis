@@ -42,3 +42,9 @@ class Deps:
             brave_api_key=brave_api_key,
             session_id=session_id,
         )
+
+
+@dataclass
+class DirectorDeps:
+    session_id: str
+    global_deps: Deps
