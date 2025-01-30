@@ -1,10 +1,12 @@
+import base64
 import json
 from types import NoneType
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import requests
 from db.supabase_client import SupabaseMemory
 from models.agent_workflows import (
     AgentRequest,
@@ -14,8 +16,7 @@ from models.agent_workflows import (
     WorkflowStep,
 )
 from pydantic_ai.messages import ModelRequest, ModelResponse, UserPromptPart, TextPart
-from models.agent_dependencies import Deps
-from agents.orchestrator_agent import orchestrator_agent
+from models.agent_dependencies import Deps, DirectorDeps
 from agents.director_agent import director_agent
 from agents.github_agent import github_agent
 from agents.web_search_agent import web_search_agent
@@ -123,6 +124,66 @@ async def create_steps_from_plan(
     return steps
 
 
+def get_image_description(img: Dict[str, Any]) -> str:
+    """Get description of image using GPT-4 Vision via OpenRouter."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
+            "HTTP-Referer": os.getenv("OPENROUTER_REFERER", "http://localhost:3000"),
+            "X-Title": os.getenv("OPENROUTER_TITLE", "Local Development"),
+        }
+
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json={
+                "model": "openai/gpt-4o-mini",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "Describe this image concisely with all the details present in the image.",
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{img['type']};base64,{img['base64']}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+            },
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error analyzing image: {str(e)}"
+
+
+def process_files_to_string(files: Optional[List[Dict[str, Any]]]) -> str:
+    """Convert a list of files into a formatted string with file info and image descriptions."""
+    if not files:
+        return ""
+
+    file_content = "Below are the listed files provided as context. Use the appropriate tools to extract the information from the files and use it to answer the user's query:\n\n"
+    for i, file in enumerate(files, 1):
+        file_type = file["type"]
+        file_name = file["name"]
+
+        if file_type in ["image/jpeg", "image/png"]:
+            # For images, get description using GPT-4
+            img_description = "Image description: " + get_image_description(file)
+            file_content += f"{i}. {file_name} (Image)\n{img_description}\n\n"
+        else:
+            # For CSV/Excel/Text files, just include name and type
+            file_content += f"{i}. {file_name} ({file_type})\n\n"
+
+    return file_content
+
+
 @app.post("/api/mini-jarvis", response_model=AgentResponse)
 async def mini_jarvis(
     request: AgentRequest, authenticated: bool = Depends(verify_token)
@@ -142,6 +203,17 @@ async def mini_jarvis(
             msg_data = msg["message"]
             msg_type = msg_data["type"]
             msg_content = msg_data["content"]
+
+            # Process files if they exist in the message data
+            if (
+                msg_type == "human"
+                and "data" in msg_data
+                and "files" in msg_data["data"]
+            ):
+                files_content = process_files_to_string(msg_data["data"]["files"])
+                if files_content:
+                    msg_content = f"{files_content}\n\n{msg_content}"
+
             msg = (
                 ModelRequest(parts=[UserPromptPart(content=msg_content)])
                 if msg_type == "human"
@@ -149,128 +221,46 @@ async def mini_jarvis(
             )
             messages.append(msg)
 
-        # Store user's query
+        # Store user's query with files if present
+        message_data = {"request_id": request.request_id}
+        if request.files:
+            message_data["files"] = request.files  # type: ignore
+
         await supabase_memory.store_message(
-            session_id=request.session_id, message_type="human", content=request.query
+            session_id=request.session_id,
+            message_type="human",
+            content=request.query,
+            data=message_data,
         )
 
         # Initialize HTTP client for API calls
         async with httpx.AsyncClient() as client:
-            # Initialize agents
-            agents = {
-                "orchestrator": orchestrator_agent,
-                "director": director_agent,
-                "github": github_agent,
-                "web_research": web_search_agent,
-            }
-
-            # Get initial workflow plan from director
-            plan_result = await director_agent.run(
-                user_prompt=request.query, message_history=messages  # type: ignore
-            )
-            if plan_result.data.get("type") == "direct_response":  # type: ignore
-                results: dict[Any, Any] = plan_result.data  # type: ignore
-                steps = []
-            else:
-                steps = await create_steps_from_plan(plan_result.data.get("steps", []))  # type: ignore
-                results = {}
-
-            # Initialize workflow plan
-            current_plan = WorkflowPlan(
-                plan_id=str(uuid.uuid4()),
-                user_query=request.query,
-                steps=steps,  # type: ignore
-            )
-
-            # Store initial plan
-            await supabase_memory.store_plan(
-                session_id=request.session_id,
-                query=request.query,
-                workflow=current_plan.model_dump(),
-                results=results,
-            )
-
-            # Execute workflow steps
-            final_result = results
-            while (
-                current_plan.current_step_index < len(current_plan.steps)
-                and not results
-            ):
-                current_step = current_plan.steps[current_plan.current_step_index]
-
-                # Execute step
-                step_result = await execute_workflow_step(
-                    client, current_step, agents, request.session_id
+            if request.files:
+                user_prompt = (
+                    f"{process_files_to_string(request.files)}\n\n{request.query}"
                 )
-                current_plan.current_step_index += 1
-
-                # Store step result
-                if step_result.result:
-                    current_result = {
-                        "step_id": current_step.step_id,
-                        "step_description": current_step.step_description,
-                        "result": step_result.result.data,
-                    }
-                    await supabase_memory.store_plan(
-                        session_id=request.session_id,
-                        query=request.query,
-                        workflow=current_step.model_dump(),
-                        results=current_result,
-                    )
-                    final_result = current_result
-
-            #     # Evaluate result
-            #     should_continue = await execute_workflow_step(
-            #         client,
-            #         WorkflowStep(
-            #             step_id=str(uuid.uuid4()),
-            #             step_description="Evaluate response",
-            #             agent_type="orchestrator",
-            #             dependencies={
-            #                 "response": step_result,
-            #                 "current_plan": current_plan,
-            #             },
-            #         ),
-            #         agents,
-            #     )
-
-            #     if not should_continue.result:
-            #         # Update plan if needed
-            #         current_plan = (
-            #             await execute_workflow_step(
-            #                 client,
-            #                 WorkflowStep(
-            #                     step_id=str(uuid.uuid4()),
-            #                     step_description="Update workflow plan",
-            #                     agent_type="orchestrator",
-            #                     dependencies={
-            #                         "current_plan": current_plan,
-            #                         "response": step_result,
-            #                     },
-            #                 ),
-            #                 agents,
-            #             )
-            #         ).result
-
-            #         # Store updated plan
-            #         await supabase_memory.store_plan(current_plan)
-
-            #     current_plan.current_step_index += 1
-            #     final_result = step_result
+            else:
+                user_prompt = request.query
+            plan_result = await director_agent.run(
+                user_prompt=user_prompt,
+                message_history=messages,  # type: ignore
+                deps=DirectorDeps(
+                    session_id=request.session_id,
+                    global_deps=Deps(session_id=request.session_id),
+                ),
+            )
 
             # Store final response
             await supabase_memory.store_message(
                 session_id=request.session_id,
                 message_type="ai",
-                content=(
-                    final_result.get("result", "") or final_result.get("response", "")
-                ),
+                content=plan_result.data,  # type: ignore
                 data={"request_id": request.request_id},
             )
 
             return AgentResponse(
                 success=True,
-                result=final_result,
+                result=plan_result.data,  # type: ignore
                 agent_type=AgentType.DIRECTOR,
             )
 

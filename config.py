@@ -1,6 +1,7 @@
 import os
 from llama_index.embeddings.nomic import NomicEmbedding
 
+base_output_dir = "data"
 
 openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 openrouter_base_url = "https://openrouter.ai/api/v1"

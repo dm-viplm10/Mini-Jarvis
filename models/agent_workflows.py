@@ -16,6 +16,7 @@ class AgentRequest(BaseModel):
     user_id: str
     request_id: str
     session_id: str
+    files: Optional[List[Dict[str, Any]]] = None
 
 
 class AgentActions(BaseModel):
