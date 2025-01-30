@@ -34,3 +34,4 @@ matplotlib
 seaborn
 opencv-python
 scikit-learn
+crawl4ai

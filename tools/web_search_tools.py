@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import pickle
 import logfire
@@ -11,15 +12,11 @@ from langchain.text_splitter import (
     MarkdownHeaderTextSplitter,
 )
 from config import embed_model
-from llama_index.core import (
-    VectorStoreIndex,
-    Document,
-    StorageContext,
-    load_index_from_storage,
-)
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode  # type: ignore
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.vector_stores.supabase import SupabaseVectorStore
 from db.supabase_client import connection_string
+from typing import List
 import vecs  # type: ignore
 
 
@@ -191,3 +188,43 @@ async def fetch_web_rag_search_result(
         return content
     except Exception as e:
         return f"Error fetching content: {str(e)}"
+
+
+async def crawl_parallel(
+    ctx: RunContext[WebResearcherDeps], urls: List[str], max_concurrent: int = 5
+):
+    """Crawl multiple URLs in parallel with a concurrency limit."""
+    browser_config = BrowserConfig(
+        headless=True,
+        verbose=False,
+        extra_args=["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],
+    )
+    crawl_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
+
+    # Create the crawler instance
+    crawler = AsyncWebCrawler(config=browser_config)
+    await crawler.start()
+
+    try:
+        # Create a semaphore to limit concurrency
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def process_url(url: str):
+            async with semaphore:
+                result = await crawler.arun(
+                    url=url, config=crawl_config, session_id=ctx.deps.session_id
+                )
+                if result.success:
+                    print(f"Successfully crawled: {url}")
+                    return f"Content from {url}:\n{result.markdown_v2.raw_markdown}\n\n"
+                else:
+                    print(f"Failed: {url} - Error: {result.error_message}")
+                    return f"Failed to crawl {url}: {result.error_message}\n\n"
+
+        # Process all URLs in parallel with limited concurrency and collect results
+        results = await asyncio.gather(*[process_url(url) for url in urls])
+
+        # Combine all results into a single string
+        return "".join(results)
+    finally:
+        await crawler.close()
