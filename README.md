@@ -173,4 +173,4 @@ This project is licensed under the terms included in the LICENSE file.
 
 ## Support
 
-For issues and feature requests, please use the GitHub issue tracker.
+For issues and feature requests, please use the github issue tracker.
