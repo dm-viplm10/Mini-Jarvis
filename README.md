@@ -1,4 +1,4 @@
-# Mini Jarvis - Intelligent Agent-based Task Automation System
+# Mini Jarvis - Intelligent Agent-based Task Automation System [Using Pydantic AI]
 
 ## Repository Overview
 
@@ -115,6 +115,110 @@ The project requires several Python packages listed in `requirements.txt`, inclu
 - `data_team_agent.py`: Coordinates data operations
 - `github_agent.py`: Handles version control tasks
 - `web_search_agent.py`: Performs web searches
+
+🎯 Director Agent
+### Core Functions
+- Workflow Planning & Execution
+- Agent Task Distribution
+- Context Management
+- Response Validation
+
+### Special Features
+✨ Dynamic JSON Workflow Generation
+✨ Real-time Agent Selection
+✨ Cross-agent State Management
+✨ Built-in Error Recovery
+
+📊 Data Team Manager Agent
+### Core Functions
+- Project Structure Management
+- Resource Allocation
+- Quality Control
+- Workflow Tracking
+
+### Special Features
+✨ Auto Project Organization
+✨ Version Control Integration
+✨ Cross-agent Coordination
+✨ Smart File Management
+
+🔬 Data Scientist Agent
+### Core Functions
+- ML Model Development
+- Statistical Analysis
+- Visualization Generation
+- Performance Metrics
+
+### Special Features
+✨ Automated Feature Importance
+✨ Smart Seasonal Analysis
+✨ Intelligent Chart Selection
+✨ Partial Data Analysis Support
+
+⚙️ Data Engineer Agent
+### Core Functions
+- Data Validation
+- Pipeline Management
+- Data Transformation
+- Quality Assurance
+
+### Special Features
+✨ Auto Quality Reports
+✨ Smart Data Cleansing
+✨ Multi-format Processing
+✨ Pipeline Auto-optimization
+
+🌐 Web Search Agent
+### Core Functions
+- Web Research
+- Content Synthesis
+- Source Verification
+- Information Retrieval
+
+### Special Features
+✨ Semantic Search
+✨ Relevance Scoring
+✨ Real-time Updates
+✨ Source Credibility Check
+
+📂 GitHub Agent
+### Core Functions
+- Repository Management
+- PR Processing
+- Code Review
+- Commit Analysis
+
+### Special Features
+✨ Auto PR Description
+✨ Smart Diff Analysis
+✨ Commit Pattern Recognition
+✨ Repository Structure Analysis
+
+🔄 Cross-Agent Capabilities
+### Data Management
+- Smart Data Routing
+- Context Preservation
+- Format Translation
+- State Management
+
+### Memory System
+- Vector Store Integration
+- Session Tracking
+- Conversation Memory
+- Context Retrieval
+
+### Image Processing
+- GPT-4 Vision Analysis
+- Auto Visualization
+- Multi-format Support
+- Image Understanding
+
+### Security
+- Token Management
+- Rate Limiting
+- Access Control
+- Secure API Handling
+
 
 #### Core Functionality (`main.py`)
 - FastAPI application setup
