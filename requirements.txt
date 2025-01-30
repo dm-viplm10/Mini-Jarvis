@@ -30,3 +30,7 @@ pandas
 lxml
 langchain-community
 vecs
+matplotlib
+seaborn
+opencv-python
+scikit-learn
