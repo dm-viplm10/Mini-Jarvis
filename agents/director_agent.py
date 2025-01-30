@@ -12,6 +12,7 @@ from pydantic_ai.usage import UsageLimits
 from pydantic_ai.models.openai import OpenAIModel
 from typing import Any, Dict, List
 from models.agent_dependencies import DirectorDeps, ProductManagerDeps
+from tools.web_search_tools import crawl_parallel
 
 
 director_agent = Agent(
@@ -38,6 +39,17 @@ def system_prompt(ctx: RunContext[None]) -> str:
     return f"""
     Today's date: {datetime.now().strftime("%Y-%m-%d")}
     """
+
+
+@director_agent.tool
+async def scrape_explicitly_defined_webpage(
+    ctx: RunContext[DirectorDeps], query: str, webpage_urls: List[str]
+) -> str:
+    """
+    Scrape a webpage based defined in the input query defined by '@webpage_url'.
+    """
+    response = await crawl_parallel(ctx, webpage_urls)
+    return response
 
 
 @director_agent.tool
