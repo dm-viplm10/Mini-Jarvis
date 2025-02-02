@@ -14,7 +14,6 @@ from langchain.text_splitter import (
 from config import embed_model
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode  # type: ignore
 from llama_index.core.retrievers import VectorIndexRetriever
-from llama_index.vector_stores.supabase import SupabaseVectorStore
 from db.supabase_client import connection_string
 from typing import List
 import vecs  # type: ignore

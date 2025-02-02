@@ -1,4 +1,4 @@
-.env
+**/.env
 .env.*
 .venv/
 venv/
@@ -8,3 +8,4 @@ venv/
 .vscode/
 .logfire/
 data/
+frontend/node_modules/
